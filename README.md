@@ -123,27 +123,3 @@ Visit → **http://localhost:5173**
 | `leaderboard_data` | server → client | Leaderboard payload |
 
 ---
-
-## 💾 Adding a Real Database (Optional)
-
-The leaderboard is currently in-memory. To persist data:
-
-1. Install: `npm install mongoose` (MongoDB) or `npm install pg` (PostgreSQL)
-2. Replace the `leaderboard` array in `server.js` with DB queries
-3. The `addToLeaderboard()` and `getLeaderboard()` functions are the only ones to modify
-
----
-
-## 🧩 Extending the App
-
-Ideas for next features:
-- [ ] User accounts with login (JWT + bcrypt)
-- [ ] Custom word lists / difficulty modes
-- [ ] Solo practice mode with stats history
-- [ ] Spectator mode
-- [ ] Sound effects (key clicks, finish fanfare)
-- [ ] Persistent leaderboard with MongoDB Atlas
-
----
-
-Built with ❤️ and Claude
