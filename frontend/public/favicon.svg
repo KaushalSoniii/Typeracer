@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1c1c20;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d0d0f;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="keyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a30;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1c1c20;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <rect width="64" height="64" rx="14" fill="url(#bgGrad)"/>
+
+  <!-- Outer border accent -->
+  <rect x="1.5" y="1.5" width="61" height="61" rx="13" fill="none" stroke="#f0c040" stroke-width="1" stroke-opacity="0.3"/>
+
+  <!-- Keyboard key body -->
+  <rect x="10" y="12" width="44" height="36" rx="7" fill="url(#keyGrad)" stroke="#3a3a42" stroke-width="1.5"/>
+
+  <!-- Key inner top-left highlight -->
+  <rect x="10" y="12" width="44" height="18" rx="7" fill="rgba(255,255,255,0.04)"/>
+
+  <!-- Key bottom shadow line -->
+  <rect x="10" y="45" width="44" height="3" rx="3" fill="rgba(0,0,0,0.4)"/>
+
+  <!-- Lightning bolt (speed symbol) centered on key -->
+  <path d="M34 18 L26 34 L31.5 34 L29 46 L38 30 L32.5 30 L36 18 Z"
+        fill="#f0c040"
+        filter="url(#glow)"
+        stroke="#f0c040"
+        stroke-width="0.5"
+        stroke-linejoin="round"/>
+
+  <!-- Small speed lines left -->
+  <line x1="11" y1="27" x2="16" y2="27" stroke="#f0c040" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>
+  <line x1="11" y1="32" x2="14" y2="32" stroke="#f0c040" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.3"/>
+
+  <!-- Small speed lines right -->
+  <line x1="53" y1="27" x2="48" y2="27" stroke="#f0c040" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>
+  <line x1="53" y1="32" x2="50" y2="32" stroke="#f0c040" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.3"/>
+</svg>
