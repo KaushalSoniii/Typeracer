@@ -250,7 +250,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) { socket.emit("error", { message: "Room not found." }); return; }
     if (room.status !== "waiting") { socket.emit("error", { message: "Race already in progress." }); return; }
-    if (room.players.size >= 6) { socket.emit("error", { message: "Room is full (max 6)." }); return; }
+    if (room.players.size >= 10) { socket.emit("error", { message: "Room is full (max 10)." }); return; }
 
     const player = createPlayer(socket.id, playerName || "Anonymous");
     room.players.set(socket.id, player);

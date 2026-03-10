@@ -21,7 +21,7 @@ function calcAccuracy(correct, total) {
   return Math.round((correct / total) * 100);
 }
 
-const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c"];
+const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c", "#ff0000", "#ffffff", "#a1009c", "#061f7a"];
 const SCREEN = { HOME: "home", LOBBY: "lobby", RACE: "race", RESULTS: "results" };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -78,7 +78,7 @@ function HomeScreen({ onCreateRoom, onJoinRoom, leaderboard }) {
               value={roomCode}
               onChange={e => setRoomCode(e.target.value.toUpperCase().slice(0, 6))}
               onKeyDown={e => e.key === "Enter" && doJoin()}
-              maxLength={6}
+              maxLength={10}
               autoFocus
             />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -165,7 +165,7 @@ function LobbyScreen({ roomId, players, isHost, socketId, onStart, onLeave }) {
         </div>
 
         <div style={S.lobbyPlayers}>
-          <p style={S.label}>players ({players.length}/6)</p>
+          <p style={S.label}>players ({players.length}/10)</p>
           {players.map((p, i) => (
             <div key={p.id} style={S.lobbyPlayer}>
               <span style={{ ...S.dot, background: PLAYER_COLORS[i % PLAYER_COLORS.length] }} />
