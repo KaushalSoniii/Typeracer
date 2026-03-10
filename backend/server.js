@@ -21,6 +21,7 @@ const io = new Server(server, {
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 const PROMPTS = [
+  // ── Tech & Programming ────────────────────────────────────────────────────
   "the quick brown fox jumps over the lazy dog near the riverbank on a cold winter morning",
   "programming is the art of telling another human what one wants the computer to do with precision and clarity",
   "in the beginning was the word and the word was with code and the code was everything we needed",
@@ -31,8 +32,71 @@ const PROMPTS = [
   "not all those who wander are lost but all those who code are definitely caffeinated most of the time",
   "we build too many walls and not enough bridges but in code we can build both simultaneously",
   "the computer was born to solve problems that did not exist before it was invented by brilliant minds",
-];
+  "a good programmer looks both ways before crossing a one way street because bugs hide in the shadows",
+  "debugging is twice as hard as writing the code in the first place so write it as simply as you can",
+  "software is like entropy it is difficult to grasp weightless and obeys the laws of its own universe",
+  "the art of coding is not just writing instructions but crafting solutions that stand the test of time",
+  "every line of code is a decision and every decision shapes the world that runs on machines we built",
+  "clean code always looks like it was written by someone who cared about the people reading it later",
+  "first make it work then make it right and finally if you need to make it fast but always in that order",
+  "the function of good software is to make the complex appear simple and the impossible feel routine",
 
+  // ── Philosophy & Wisdom ───────────────────────────────────────────────────
+  "we are what we repeatedly do therefore excellence is not an act but a habit we build every single day",
+  "the measure of intelligence is the ability to change your mind when new evidence arrives at your door",
+  "it is not the mountain we conquer but ourselves and the limits we thought were permanent but were not",
+  "do not go where the path may lead instead go where there is no path and leave a trail for others",
+  "the secret of getting ahead is getting started one small step forward is better than standing perfectly still",
+  "life is what happens when you are busy making other plans so slow down and notice what is around you",
+  "an unexamined life is not worth living but an unlived life is not worth examining either so do both",
+  "the only true wisdom is in knowing you know nothing and then spending your whole life trying to learn more",
+  "darkness cannot drive out darkness only light can do that and hate cannot drive out hate only love can",
+  "in three words i can sum up everything i have learned about life it goes on no matter what",
+
+  // ── Science & Discovery ───────────────────────────────────────────────────
+  "the universe is under no obligation to make sense to you but it rewards those who keep asking questions",
+  "science is a way of thinking much more than it is a body of knowledge accumulated over centuries of wonder",
+  "somewhere something incredible is waiting to be known and it is waiting for the curious mind to find it",
+  "the good thing about science is that it is true whether or not you believe in it and that is beautiful",
+  "we are all made of star stuff the nitrogen in our genes the calcium in our teeth all formed in stars",
+  "two things are infinite the universe and human stupidity and i am not sure about the universe yet",
+  "the important thing is to not stop questioning curiosity has its own reason for existing in us always",
+  "look up at the stars and not down at your feet try to make sense of what you see and wonder about it",
+
+  // ── Motivation & Success ──────────────────────────────────────────────────
+  "success is not final failure is not fatal it is the courage to continue that counts above all else",
+  "the harder you work for something the greater you will feel when you finally achieve it after all that effort",
+  "do not watch the clock do what it does and keep going forward even when the progress feels invisible",
+  "a winner is just a loser who tried one more time and refused to accept that this was the final answer",
+  "you do not have to be great to start but you have to start if you ever want to become truly great",
+  "the difference between ordinary and extraordinary is just that little extra you put in every single day",
+  "push yourself because no one else is going to do it for you and the results will speak for themselves",
+  "your limitation is only your imagination and the willingness to work past the point where others stop",
+
+  // ── Nature & The World ────────────────────────────────────────────────────
+  "the earth does not belong to us we belong to the earth and everything we do echoes through its future",
+  "in every walk with nature one receives far more than one seeks the trees give back what words cannot",
+  "look deep into nature and then you will understand everything better than any book could ever teach you",
+  "the ocean stirs the heart inspires the imagination and brings eternal joy to the soul of those who listen",
+  "there is something infinitely healing in the repeated refrains of nature the assurance that dawn comes again",
+  "adopt the pace of nature her secret is patience and she never hurries yet everything gets accomplished",
+
+  // ── Creativity & Art ──────────────────────────────────────────────────────
+  "creativity is intelligence having fun and the two together can change the world in ways we cannot predict",
+  "every artist dips the brush in their own soul and paints their own nature into every picture they create",
+  "the purpose of art is washing the dust of daily life off your soul and reminding you of what matters most",
+  "you can not use up creativity the more you use the more you have and the better you get at sharing it",
+  "imagination is more important than knowledge knowledge is limited but imagination encircles the entire world",
+  "art enables us to find ourselves and lose ourselves at the same time which is the rarest kind of freedom",
+
+  // ── Typing & Speed ────────────────────────────────────────────────────────
+  "speed comes from practice and practice comes from discipline the fingers learn what the mind commits to",
+  "a typist is a musician playing the keyboard of language and every keystroke is a note in the composition",
+  "the fastest fingers in the race are the ones that have made the most mistakes and kept going anyway",
+  "rhythm is everything in typing find the flow and the words will pour out faster than you ever thought possible",
+  "accuracy beats speed every time but when you have both there is no one who can compete with you today",
+  "the keyboard is an extension of the mind and the words that flow through it reveal the speed of thought",
+];
 // ─── State ────────────────────────────────────────────────────────────────────
 const rooms = new Map();
 const leaderboardRaw = [];
