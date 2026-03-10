@@ -217,7 +217,7 @@ function endRace(roomId) {
   );
 
   io.to(roomId).emit("race_finished", { results, leaderboard: getLeaderboard() });
-  setTimeout(() => rooms.delete(roomId), 120000);
+  room.cleanupTimer = setTimeout(() => rooms.delete(roomId), 120000);
 }
 
 // ─── Sockets ──────────────────────────────────────────────────────────────────
@@ -286,6 +286,7 @@ io.on("connection", (socket) => {
 
     if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
     if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
+    if (room.cleanupTimer) { clearTimeout(room.cleanupTimer); room.cleanupTimer = null; }
 
     room.status = "waiting";
     room.prompt = "";
