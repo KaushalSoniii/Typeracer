@@ -4,19 +4,22 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 
+const ALLOWED_ORIGINS = [
+  "https://typeracer-omega.vercel.app",
+  "http://localhost:5173",
+];
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGINS, methods: ["GET", "POST"], credentials: true }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-   origin: ["https://typeracer-omega.vercel.app", "http://localhost:5173"],
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"], credentials: true },
+  transports: ["polling", "websocket"],
 });
 
-// ─── Word Prompts ────────────────────────────────────────────────────────────
+// ─── Prompts ──────────────────────────────────────────────────────────────────
 const PROMPTS = [
   "the quick brown fox jumps over the lazy dog near the riverbank on a cold winter morning",
   "programming is the art of telling another human what one wants the computer to do with precision and clarity",
@@ -30,77 +33,71 @@ const PROMPTS = [
   "the computer was born to solve problems that did not exist before it was invented by brilliant minds",
 ];
 
-// ─── In-Memory State ─────────────────────────────────────────────────────────
-const rooms = new Map();       // roomId -> Room
-const leaderboard = [];        // [{name, wpm, accuracy, date}]
-const MAX_LEADERBOARD = 50;
+// ─── State ────────────────────────────────────────────────────────────────────
+const rooms = new Map();
+const leaderboardRaw = [];
 
-// ─── Room Structure ──────────────────────────────────────────────────────────
-function createRoom(roomId, hostName) {
+function getLeaderboard() {
+  const best = new Map();
+  for (const e of leaderboardRaw) {
+    const key = e.name.toLowerCase();
+    if (!best.has(key) || e.wpm > best.get(key).wpm) best.set(key, e);
+  }
+  return Array.from(best.values()).sort((a, b) => b.wpm - a.wpm).slice(0, 5);
+}
+
+function addToLeaderboard(entry) {
+  leaderboardRaw.push({ ...entry, date: new Date().toISOString() });
+}
+
+function createRoom(roomId) {
   return {
-    id: roomId,
-    host: null,
-    players: new Map(),   // socketId -> Player
-    status: "waiting",    // waiting | countdown | racing | finished
-    prompt: "",
-    startTime: null,
-    countdownTimer: null,
+    id: roomId, host: null,
+    players: new Map(),
+    status: "waiting",
+    prompt: "", startTime: null,
+    countdownTimer: null, endTimer: null,
     createdAt: Date.now(),
   };
 }
 
 function createPlayer(socketId, name) {
   return {
-    id: socketId,
-    name,
-    progress: 0,       // chars typed correctly
-    wpm: 0,
-    accuracy: 100,
-    finished: false,
-    finishTime: null,
-    finishRank: null,
-    errors: 0,
-    totalTyped: 0,
+    id: socketId, name,
+    progress: 0, wpm: 0, accuracy: 100,
+    finished: false, finishTime: null, finishRank: null,
+    errors: 0, totalTyped: 0,
   };
 }
 
-function getRoomPublicState(room) {
-  const players = Array.from(room.players.values()).map((p) => ({
-    id: p.id,
-    name: p.name,
-    progress: p.progress,
-    wpm: p.wpm,
-    accuracy: p.accuracy,
-    finished: p.finished,
-    finishRank: p.finishRank,
-  }));
+function resetPlayer(p) {
+  p.progress = 0; p.wpm = 0; p.accuracy = 100;
+  p.finished = false; p.finishTime = null; p.finishRank = null;
+  p.errors = 0; p.totalTyped = 0;
+}
+
+function getRoomState(room) {
   return {
     id: room.id,
     status: room.status,
     prompt: room.prompt,
-    players,
     host: room.host,
+    players: Array.from(room.players.values()).map(p => ({
+      id: p.id, name: p.name,
+      progress: p.progress, wpm: p.wpm, accuracy: p.accuracy,
+      finished: p.finished, finishRank: p.finishRank,
+    })),
   };
 }
 
-function getLeaderboard() {
-  return leaderboard
-    .sort((a, b) => b.wpm - a.wpm)
-    .slice(0, 20);
-}
-
-function addToLeaderboard(entry) {
-  leaderboard.push({ ...entry, date: new Date().toISOString() });
-  leaderboard.sort((a, b) => b.wpm - a.wpm);
-  if (leaderboard.length > MAX_LEADERBOARD) leaderboard.splice(MAX_LEADERBOARD);
-}
-
+// ─── Race Logic ───────────────────────────────────────────────────────────────
 function startCountdown(roomId) {
   const room = rooms.get(roomId);
   if (!room) return;
-
   room.status = "countdown";
   room.prompt = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+
+  // Send countdown_start to everyone with the prompt text
   io.to(roomId).emit("countdown_start", { prompt: room.prompt });
 
   let count = 3;
@@ -111,97 +108,85 @@ function startCountdown(roomId) {
       count--;
       room.countdownTimer = setTimeout(tick, 1000);
     } else {
-      startRace(roomId);
+      room.status = "racing";
+      room.startTime = Date.now();
+      io.to(roomId).emit("race_start", { startTime: room.startTime });
     }
   };
+  // First tick after 1s
   room.countdownTimer = setTimeout(tick, 1000);
 }
 
-function startRace(roomId) {
+function onPlayerFinished(roomId) {
   const room = rooms.get(roomId);
-  if (!room) return;
-
-  room.status = "racing";
-  room.startTime = Date.now();
-  io.to(roomId).emit("race_start", { startTime: room.startTime });
-}
-
-function checkAllFinished(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  const allDone = Array.from(room.players.values()).every((p) => p.finished);
-  if (allDone) endRace(roomId);
+  if (!room || room.status !== "racing") return;
+  const players = Array.from(room.players.values());
+  const finishedCount = players.filter(p => p.finished).length;
+  if (finishedCount === players.length) {
+    if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
+    endRace(roomId);
+  } else if (finishedCount === 1 && !room.endTimer) {
+    room.endTimer = setTimeout(() => endRace(roomId), 20000);
+  }
 }
 
 function endRace(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.status === "finished") return;
   room.status = "finished";
+  if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
 
-  const results = Array.from(room.players.values())
-    .sort((a, b) => (a.finishTime || Infinity) - (b.finishTime || Infinity))
-    .map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      wpm: p.wpm,
-      accuracy: p.accuracy,
-      rank: p.finishRank || i + 1,
-      finished: p.finished,
-    }));
-
-  // Add top result to leaderboard
-  results.filter(r => r.finished).forEach(r => {
-    addToLeaderboard({ name: r.name, wpm: r.wpm, accuracy: r.accuracy });
+  const sorted = Array.from(room.players.values()).sort((a, b) => {
+    if (a.finished && b.finished) return a.finishTime - b.finishTime;
+    if (a.finished) return -1;
+    if (b.finished) return 1;
+    return b.progress - a.progress;
   });
 
-  io.to(roomId).emit("race_finished", {
-    results,
-    leaderboard: getLeaderboard(),
-  });
+  const results = sorted.map((p, i) => ({
+    id: p.id, name: p.name, wpm: p.wpm, accuracy: p.accuracy,
+    rank: p.finishRank || i + 1, finished: p.finished,
+  }));
 
-  // Auto-cleanup room after 60s
-  setTimeout(() => {
-    rooms.delete(roomId);
-  }, 60000);
+  results.filter(r => r.finished).forEach(r =>
+    addToLeaderboard({ name: r.name, wpm: r.wpm, accuracy: r.accuracy })
+  );
+
+  io.to(roomId).emit("race_finished", { results, leaderboard: getLeaderboard() });
+  setTimeout(() => rooms.delete(roomId), 120000);
 }
 
-// ─── Socket.io Logic ─────────────────────────────────────────────────────────
+// ─── Sockets ──────────────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
-  console.log(`[+] Connected: ${socket.id}`);
+  console.log(`[+] ${socket.id}`);
 
-  // Create a new room
+  // CREATE ROOM
   socket.on("create_room", ({ playerName }) => {
     const roomId = uuidv4().slice(0, 6).toUpperCase();
-    const room = createRoom(roomId, playerName);
+    const room = createRoom(roomId);
     const player = createPlayer(socket.id, playerName || "Anonymous");
-
     room.host = socket.id;
     room.players.set(socket.id, player);
     rooms.set(roomId, room);
-
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.playerName = playerName;
 
-    socket.emit("room_created", { roomId, state: getRoomPublicState(room) });
+    // "room_entered" — single event for both create and join
+    socket.emit("room_entered", {
+      roomId,
+      isHost: true,
+      state: getRoomState(room),
+    });
     console.log(`[Room] Created: ${roomId} by ${playerName}`);
   });
 
-  // Join existing room
+  // JOIN ROOM
   socket.on("join_room", ({ roomId, playerName }) => {
     const room = rooms.get(roomId);
-    if (!room) {
-      socket.emit("error", { message: "Room not found." });
-      return;
-    }
-    if (room.status !== "waiting") {
-      socket.emit("error", { message: "Race already in progress." });
-      return;
-    }
-    if (room.players.size >= 6) {
-      socket.emit("error", { message: "Room is full (max 6 players)." });
-      return;
-    }
+    if (!room) { socket.emit("error", { message: "Room not found." }); return; }
+    if (room.status !== "waiting") { socket.emit("error", { message: "Race already in progress." }); return; }
+    if (room.players.size >= 6) { socket.emit("error", { message: "Room is full (max 6)." }); return; }
 
     const player = createPlayer(socket.id, playerName || "Anonymous");
     room.players.set(socket.id, player);
@@ -209,32 +194,50 @@ io.on("connection", (socket) => {
     socket.data.roomId = roomId;
     socket.data.playerName = playerName;
 
-    io.to(roomId).emit("player_joined", { state: getRoomPublicState(room) });
+    // Send full state to the new joiner — they'll switch to lobby screen
+    socket.emit("room_entered", {
+      roomId,
+      isHost: false,
+      state: getRoomState(room),
+    });
+
+    // Tell everyone already in the room that a new player joined
+    socket.to(roomId).emit("player_joined", { state: getRoomState(room) });
     console.log(`[Room] ${playerName} joined ${roomId}`);
   });
 
-  // Host starts the race
+  // START RACE (host only)
   socket.on("start_race", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
-    if (!room) return;
-    if (room.host !== socket.id) {
-      socket.emit("error", { message: "Only the host can start the race." });
-      return;
-    }
-    if (room.players.size < 1) {
-      socket.emit("error", { message: "Need at least 1 player." });
-      return;
-    }
+    if (!room || room.host !== socket.id || room.status !== "waiting") return;
     startCountdown(roomId);
   });
 
-  // Player typing progress update
+  // PLAY AGAIN (host only) — resets room and broadcasts to ALL players
+  socket.on("play_again", () => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    if (!room || room.host !== socket.id) return;
+
+    if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
+    if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
+
+    room.status = "waiting";
+    room.prompt = "";
+    room.startTime = null;
+    for (const p of room.players.values()) resetPlayer(p);
+
+    // ALL players go back to lobby
+    io.to(roomId).emit("room_reset", { state: getRoomState(room) });
+    console.log(`[Room] Reset for play again: ${roomId}`);
+  });
+
+  // TYPING PROGRESS
   socket.on("typing_progress", ({ progress, wpm, accuracy, errors, totalTyped }) => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
     if (!room || room.status !== "racing") return;
-
     const player = room.players.get(socket.id);
     if (!player || player.finished) return;
 
@@ -244,84 +247,51 @@ io.on("connection", (socket) => {
     player.errors = errors;
     player.totalTyped = totalTyped;
 
-    // Check if player finished
     if (progress >= room.prompt.length) {
       player.finished = true;
       player.finishTime = Date.now();
-      const finishedCount = Array.from(room.players.values()).filter(p => p.finished).length;
-      player.finishRank = finishedCount;
-
-      socket.emit("player_finished", {
-        rank: player.finishRank,
-        wpm: player.wpm,
-        accuracy: player.accuracy,
-      });
-
-      checkAllFinished(roomId);
+      player.finishRank = Array.from(room.players.values()).filter(p => p.finished).length;
+      socket.emit("player_finished", { rank: player.finishRank, wpm: player.wpm, accuracy: player.accuracy });
+      onPlayerFinished(roomId);
     }
 
-    // Broadcast progress to all in room
     io.to(roomId).emit("progress_update", {
       playerId: socket.id,
-      progress: player.progress,
-      wpm: player.wpm,
-      accuracy: player.accuracy,
-      finished: player.finished,
-      finishRank: player.finishRank,
+      progress: player.progress, wpm: player.wpm, accuracy: player.accuracy,
+      finished: player.finished, finishRank: player.finishRank,
     });
   });
 
-  // Get leaderboard
+  // LEADERBOARD
   socket.on("get_leaderboard", () => {
     socket.emit("leaderboard_data", { leaderboard: getLeaderboard() });
   });
 
-  // Disconnect cleanup
+  // DISCONNECT
   socket.on("disconnect", () => {
     const roomId = socket.data.roomId;
     if (!roomId) return;
-
     const room = rooms.get(roomId);
     if (!room) return;
 
     room.players.delete(socket.id);
-    console.log(`[-] Disconnected: ${socket.id} from room ${roomId}`);
-
     if (room.players.size === 0) {
       if (room.countdownTimer) clearTimeout(room.countdownTimer);
+      if (room.endTimer) clearTimeout(room.endTimer);
       rooms.delete(roomId);
-      console.log(`[Room] Deleted empty room: ${roomId}`);
     } else {
-      // Transfer host if needed
       if (room.host === socket.id) {
         room.host = room.players.keys().next().value;
         io.to(roomId).emit("host_changed", { newHost: room.host });
       }
-      io.to(roomId).emit("player_left", { state: getRoomPublicState(room) });
+      io.to(roomId).emit("player_left", { state: getRoomState(room) });
+      if (room.status === "racing") onPlayerFinished(roomId);
     }
   });
 });
 
-// ─── REST Endpoints ───────────────────────────────────────────────────────────
-app.get("/api/leaderboard", (req, res) => {
-  res.json({ leaderboard: getLeaderboard() });
-});
-
-app.get("/api/rooms", (req, res) => {
-  const activeRooms = Array.from(rooms.values())
-    .filter(r => r.status === "waiting")
-    .map(r => ({
-      id: r.id,
-      playerCount: r.players.size,
-      createdAt: r.createdAt,
-    }));
-  res.json({ rooms: activeRooms });
-});
-
+app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: getLeaderboard() }));
 app.get("/health", (req, res) => res.json({ status: "ok", rooms: rooms.size }));
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server on http://localhost:${PORT}`));
