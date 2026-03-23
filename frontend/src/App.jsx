@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
+import Chat from "./Chat";
 
 // ─── Socket ───────────────────────────────────────────────────────────────────
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
@@ -21,7 +22,7 @@ function calcAccuracy(correct, total) {
   return Math.round((correct / total) * 100);
 }
 
-const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c", "#ff0000", "#ffffff", "#a1009c", "#061f7a"];
+const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c"];
 const SCREEN = { HOME: "home", LOBBY: "lobby", RACE: "race", RESULTS: "results" };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -78,7 +79,7 @@ function HomeScreen({ onCreateRoom, onJoinRoom, leaderboard }) {
               value={roomCode}
               onChange={e => setRoomCode(e.target.value.toUpperCase().slice(0, 6))}
               onKeyDown={e => e.key === "Enter" && doJoin()}
-              maxLength={10}
+              maxLength={6}
               autoFocus
             />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -165,7 +166,7 @@ function LobbyScreen({ roomId, players, isHost, socketId, onStart, onLeave }) {
         </div>
 
         <div style={S.lobbyPlayers}>
-          <p style={S.label}>players ({players.length}/10)</p>
+          <p style={S.label}>players ({players.length}/6)</p>
           {players.map((p, i) => (
             <div key={p.id} style={S.lobbyPlayer}>
               <span style={{ ...S.dot, background: PLAYER_COLORS[i % PLAYER_COLORS.length] }} />
@@ -435,6 +436,9 @@ export default function App() {
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceKey, setRaceKey]       = useState(0); // increment to force RaceScreen remount
 
+  // ── Chat ──
+  const [messages, setMessages]     = useState([]);
+
   const sk = getSocket();
 
   const notify = (msg) => {
@@ -456,6 +460,7 @@ export default function App() {
       setRoomId(roomId);
       setIsHost(isHost);
       setPlayers(state.players);
+      setMessages(state.chat || []);   // load existing chat history
       setScreen(SCREEN.LOBBY);
     });
 
@@ -476,6 +481,11 @@ export default function App() {
         setIsHost(true);
         notify("you are now the host");
       }
+    });
+
+    // New chat message — append to list
+    sk.on("new_message", (msg) => {
+      setMessages(prev => [...prev, msg]);
     });
 
     // Race countdown starting — go to race screen and reset race state
@@ -519,7 +529,8 @@ export default function App() {
       setCountdown(null);
       setRaceStarted(false);
       setPlayers(state.players);
-      setScreen(SCREEN.LOBBY);    // everyone goes back to lobby
+      // keep chat history — don't clear it on play again (requirement #3)
+      setScreen(SCREEN.LOBBY);
     });
 
     sk.on("leaderboard_data", ({ leaderboard }) => {
@@ -549,6 +560,10 @@ export default function App() {
   // FIX #3: Host emits to server — server resets and broadcasts room_reset to all
   const handlePlayAgain = () => sk.emit("play_again");
 
+  const handleSendMessage = useCallback((text) => {
+    sk.emit("send_message", { text });
+  }, []);
+
   const handleLeave = () => {
     sk.disconnect();
     setTimeout(() => {
@@ -557,37 +572,55 @@ export default function App() {
       setRoomId(""); setPlayers([]); setIsHost(false);
       setPrompt(""); setStartTime(null); setResults([]);
       setCountdown(null); setRaceStarted(false);
+      setMessages([]);   // clear chat on leave
       sk.emit("get_leaderboard");
     }, 100);
   };
 
+  // Chat is shown on all screens except HOME
+  const showChat = screen !== SCREEN.HOME;
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", position: "relative" }}>
+    <div style={{ minHeight: "100vh", position: "relative", display: "flex" }}>
       {notification && <div style={S.notification}>{notification}</div>}
       {error && <div style={{ ...S.notification, background: "var(--red)", color: "#fff" }}>✗ {error}</div>}
 
-      {screen === SCREEN.HOME && (
-        <HomeScreen onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} leaderboard={leaderboard} />
-      )}
-      {screen === SCREEN.LOBBY && (
-        <LobbyScreen
-          roomId={roomId} players={players} isHost={isHost}
-          socketId={socketId} onStart={handleStartRace} onLeave={handleLeave}
-        />
-      )}
-      {screen === SCREEN.RACE && (
-        <RaceScreen
-          key={raceKey}
-          prompt={prompt} players={players} socketId={socketId}
-          startTime={startTime} countdown={countdown} raceStarted={raceStarted}
-          onProgress={handleProgress}
-        />
-      )}
-      {screen === SCREEN.RESULTS && (
-        <ResultsScreen
-          results={results} leaderboard={leaderboard} isHost={isHost}
-          onPlayAgain={handlePlayAgain} onHome={handleLeave}
+      {/* Main content area */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {screen === SCREEN.HOME && (
+          <HomeScreen onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} leaderboard={leaderboard} />
+        )}
+        {screen === SCREEN.LOBBY && (
+          <LobbyScreen
+            roomId={roomId} players={players} isHost={isHost}
+            socketId={socketId} onStart={handleStartRace} onLeave={handleLeave}
+          />
+        )}
+        {screen === SCREEN.RACE && (
+          <RaceScreen
+            key={raceKey}
+            prompt={prompt} players={players} socketId={socketId}
+            startTime={startTime} countdown={countdown} raceStarted={raceStarted}
+            onProgress={handleProgress}
+          />
+        )}
+        {screen === SCREEN.RESULTS && (
+          <ResultsScreen
+            results={results} leaderboard={leaderboard} isHost={isHost}
+            onPlayAgain={handlePlayAgain} onHome={handleLeave}
+          />
+        )}
+      </div>
+
+      {/* Chat panel — visible on all screens except HOME */}
+      {showChat && (
+        <Chat
+          messages={messages}
+          players={players}
+          socketId={socketId}
+          onSendMessage={handleSendMessage}
+          disabled={!roomId}
         />
       )}
     </div>

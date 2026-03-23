@@ -97,6 +97,7 @@ const PROMPTS = [
   "accuracy beats speed every time but when you have both there is no one who can compete with you today",
   "the keyboard is an extension of the mind and the words that flow through it reveal the speed of thought",
 ];
+
 // ─── State ────────────────────────────────────────────────────────────────────
 const rooms = new Map();
 const leaderboardRaw = [];
@@ -120,7 +121,8 @@ function createRoom(roomId) {
     players: new Map(),
     status: "waiting",
     prompt: "", startTime: null,
-    countdownTimer: null, endTimer: null,
+    countdownTimer: null, endTimer: null, cleanupTimer: null,
+    chat: [],
     createdAt: Date.now(),
   };
 }
@@ -151,6 +153,7 @@ function getRoomState(room) {
       progress: p.progress, wpm: p.wpm, accuracy: p.accuracy,
       finished: p.finished, finishRank: p.finishRank,
     })),
+    chat: room.chat,
   };
 }
 
@@ -242,6 +245,8 @@ io.on("connection", (socket) => {
       isHost: true,
       state: getRoomState(room),
     });
+    const sysMsg = { id: Date.now(), type: "system", text: `${playerName || "Anonymous"} created the room`, ts: Date.now() };
+    room.chat.push(sysMsg);
     console.log(`[Room] Created: ${roomId} by ${playerName}`);
   });
 
@@ -250,7 +255,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) { socket.emit("error", { message: "Room not found." }); return; }
     if (room.status !== "waiting") { socket.emit("error", { message: "Race already in progress." }); return; }
-    if (room.players.size >= 10) { socket.emit("error", { message: "Room is full (max 10)." }); return; }
+    if (room.players.size >= 6) { socket.emit("error", { message: "Room is full (max 6)." }); return; }
 
     const player = createPlayer(socket.id, playerName || "Anonymous");
     room.players.set(socket.id, player);
@@ -267,6 +272,11 @@ io.on("connection", (socket) => {
 
     // Tell everyone already in the room that a new player joined
     socket.to(roomId).emit("player_joined", { state: getRoomState(room) });
+
+    // System message in chat
+    const joinMsg = { id: Date.now(), type: "system", text: `${playerName || "Anonymous"} joined the room`, ts: Date.now() };
+    room.chat.push(joinMsg);
+    io.to(roomId).emit("new_message", joinMsg);
     console.log(`[Room] ${playerName} joined ${roomId}`);
   });
 
@@ -327,6 +337,26 @@ io.on("connection", (socket) => {
     });
   });
 
+  // CHAT
+  socket.on("send_message", ({ text }) => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    if (!room || !text || !text.trim()) return;
+    const clean = text.trim().slice(0, 200);
+    const player = room.players.get(socket.id);
+    const msg = {
+      id: Date.now() + Math.random(),
+      type: "chat",
+      playerId: socket.id,
+      playerName: player?.name || socket.data.playerName || "Anonymous",
+      text: clean,
+      ts: Date.now(),
+    };
+    room.chat.push(msg);
+    if (room.chat.length > 200) room.chat.shift();
+    io.to(roomId).emit("new_message", msg);
+  });
+
   // LEADERBOARD
   socket.on("get_leaderboard", () => {
     socket.emit("leaderboard_data", { leaderboard: getLeaderboard() });
@@ -349,6 +379,10 @@ io.on("connection", (socket) => {
         room.host = room.players.keys().next().value;
         io.to(roomId).emit("host_changed", { newHost: room.host });
       }
+      const leaveName = socket.data.playerName || "A player";
+      const leaveMsg = { id: Date.now(), type: "system", text: `${leaveName} left the room`, ts: Date.now() };
+      room.chat.push(leaveMsg);
+      io.to(roomId).emit("new_message", leaveMsg);
       io.to(roomId).emit("player_left", { state: getRoomState(room) });
       if (room.status === "racing") onPlayerFinished(roomId);
     }
@@ -359,4 +393,4 @@ app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: getLeaderboard
 app.get("/health", (req, res) => res.json({ status: "ok", rooms: rooms.size }));
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`🚀 Server on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(` Server on http://localhost:${PORT}`));
