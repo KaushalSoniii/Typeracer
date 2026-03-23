@@ -22,7 +22,7 @@ function calcAccuracy(correct, total) {
   return Math.round((correct / total) * 100);
 }
 
-const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c"];
+const PLAYER_COLORS = ["#f0c040","#60a5fa","#4ade80","#f87171","#c084fc","#fb923c", "#042943", "#484b4d", "#4c566a", "#fb00e6"];
 const SCREEN = { HOME: "home", LOBBY: "lobby", RACE: "race", RESULTS: "results" };
 
 // ═══════════════════════════════════════════════════════════════════════════════
