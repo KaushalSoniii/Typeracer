@@ -14,6 +14,7 @@ typeracer-clone/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx        ← Full React app (all screens)
+│   │   ├── Chat.jsx       ← Chat screen
 │   │   ├── main.jsx       ← Entry point
 │   │   └── index.css      ← Global styles
 │   ├── index.html
@@ -21,7 +22,6 @@ typeracer-clone/
 │   └── package.json
 └── README.md
 ```
-
 ---
 
 ## ⚡ Quick Start
